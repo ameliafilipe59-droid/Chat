@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<meta name="theme-color" content="#202c33">
+
+<title>Chat Whayame</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+<style>
+body{margin:0;font-family:Arial;background:#0b141a}
+
+/* LOGIN */
+.login{position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:#0b141a;z-index:2000}
+.login-box{background:#202c33;padding:25px;border-radius:12px;width:90%;max-width:300px;text-align:center}
+.login-box input{width:100%;padding:12px;border:none;border-radius:8px;background:#2a3942;color:white;margin-top:10px}
+.login-box button{width:100%;padding:12px;border:none;border-radius:8px;background:#00a884;color:white;margin-top:10px}
+
+/* CHAT */
+.chat{display:none;height:100vh;flex-direction:column}
+
+/* HEADER */
+.header{position:fixed;top:0;left:0;right:0;height:60px;background:#202c33;display:flex;justify-content:space-between;align-items:center;padding:0 10px;color:white;z-index:1000}
+.left{display:flex;align-items:center;gap:10px;cursor:pointer}
+.left img{width:40px;height:40px;border-radius:50%}
+
+/* MENU */
+.menu{display:none;position:fixed;top:60px;right:10px;background:#111b21;border-radius:12px;width:220px;z-index:1500}
+.menu div{padding:14px;color:white;cursor:pointer}
+.menu div:hover{background:#2a3942}
+
+/* MESSAGES */
+.messages{flex:1;overflow-y:auto;padding:80px 10px 120px}
+.msg{margin:6px 0;display:flex;flex-direction:column}
+.bubble{padding:10px;border-radius:10px;max-width:75%}
+.me{align-items:flex-end;}
+.me .bubble{background:#005c4b;color:white;}
+.other{align-items:flex-start;}
+.other .bubble{background:#202c33;color:white;}
+.name-user{font-size:12px;font-weight:bold}
+
+/* HORA */
+.time{font-size:10px;color:#ccc;margin-top:4px;text-align:right}
+
+/* SISTEMA */
+.system-msg{text-align:center;font-size:12px;color:#8696a0;margin:10px 0}
+
+/* ONLINE */
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-left:5px;background:#555}
+.online{background:#00ff00}
+
+/* INPUT */
+.input{position:fixed;bottom:0;left:0;right:0;background:#202c33;padding:8px;z-index:1000}
+.input-row{display:flex;gap:8px}
+.input-box{flex:1;background:#2a3942;border-radius:25px;padding:5px 10px}
+textarea{width:100%;border:none;background:transparent;color:white;resize:none;outline:none}
+.send-btn{width:45px;height:45px;border:none;border-radius:50%;background:#00a884;color:white}
+
+/* REPLY */
+.reply-ui{display:none;background:#1f2c34;padding:8px;border-left:4px solid #00a884;border-radius:6px;margin-bottom:5px;position:relative}
+.reply-ui .close{position:absolute;right:8px;top:5px;cursor:pointer}
+
+/* TYPING */
+.typing-box{
+position:fixed;
+bottom:70px;
+left:10px;
+background:#202c33;
+padding:8px 12px;
+border-radius:20px;
+font-size:13px;
+color:#ccc;
+display:none;
+animation:subir 0.3s ease;
+}
+
+@keyframes subir{
+from{transform:translateY(20px);opacity:0}
+to{transform:translateY(0);opacity:1}
+}
+
+.dots::after{
+content:"";
+animation:pontos 1.5s infinite;
+}
+
+@keyframes pontos{
+0%{content:"."}
+33%{content:".."}
+66%{content:"..."}
+100%{content:"."}
+}
+</style>
+</head>
+
+<body>
+
+<div id="login" class="login">
+<div class="login-box">
+<h2 style="color:white;">Chat Whayame</h2>
+<input id="nomeInput" placeholder="Digite seu nome">
+<button onclick="entrar()">Entrar</button>
+</div>
+</div>
+
+<div id="chatArea" class="chat">
+
+<div class="header">
+<div class="left" onclick="toggleMenu(event)">
+<img src="https://i.pravatar.cc/150?img=5">
+<div>chat-whayame</div>
+</div>
+<i class="bi bi-three-dots-vertical" onclick="toggleMenu(event)"></i>
+</div>
+
+<div id="menu" class="menu">
+<div onclick="perfil()">Perfil</div>
+<div onclick="partilhar()">Partilhar</div>
+<div onclick="definicoes()">Definições</div>
+</div>
+
+<div id="chat" class="messages"></div>
+<div id="typing" class="typing-box"></div>
+
+<div class="input">
+
+<div id="replyUI" class="reply-ui">
+<div id="replyNome"></div>
+<div id="replyMsg"></div>
+<span class="close" onclick="cancelReply()">✕</span>
+</div>
+
+<div class="input-row">
+<div class="input-box">
+<textarea id="mensagem" placeholder="Mensagem" oninput="digitando()"></textarea>
+</div>
+<button class="send-btn" onclick="enviar()">
+<i class="bi bi-send"></i>
+</button>
+</div>
+
+</div>
+
+</div>
+
+<audio id="typingSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSy...",projectId:"chat-whayame"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+
+let meuNome="";
+let replyMsg=null;
+let typingTimeout;
+let tocouSom=false;
+let primeiraCarga=true;
+
+/* 🔔 PERMISSÃO */
+if(Notification.permission!=="granted"){
+Notification.requestPermission();
+}
+
+/* COR */
+function gerarCor(nome){
+let hash=0;
+for(let i=0;i<nome.length;i++){
+hash=nome.charCodeAt(i)+((hash<<5)-hash);
+}
+return `hsl(${hash%360},70%,60%)`;
+}
+
+/* HORA */
+function formatarHora(ts){
+const d=new Date(ts);
+return d.getHours().toString().padStart(2,'0')+":"+d.getMinutes().toString().padStart(2,'0');
+}
+
+/* LOGIN */
+window.onload=()=>{
+const nomeSalvo=localStorage.getItem("nomeChat");
+if(nomeSalvo){
+meuNome=nomeSalvo;
+entrarDireto();
+}
+};
+
+function entrar(){
+const nome=document.getElementById("nomeInput").value.trim();
+if(!nome)return;
+localStorage.setItem("nomeChat",nome);
+meuNome=nome;
+entrarDireto();
+
+db.collection("mensagens").add({
+tipo:"entrada",
+nome:meuNome,
+data:Date.now()
+});
+}
+
+function entrarDireto(){
+db.collection("status").doc(meuNome).set({online:true});
+window.addEventListener("beforeunload", ()=>{
+db.collection("status").doc(meuNome).set({online:false});
+});
+document.getElementById("login").style.display="none";
+document.getElementById("chatArea").style.display="flex";
+}
+
+/* MENU */
+function toggleMenu(e){
+e.stopPropagation();
+const m=document.getElementById("menu");
+m.style.display=m.style.display==="block"?"none":"block";
+}
+document.addEventListener("click", ()=>{document.getElementById("menu").style.display="none";});
+
+/* AÇÕES */
+function perfil(){alert("Perfil em desenvolvimento");}
+function partilhar(){navigator.share?navigator.share({title:"Chat",url:location.href}):alert("Partilha indisponível");}
+function definicoes(){alert("Definições indisponível");}
+
+/* DIGITANDO */
+function digitando(){
+db.collection("typing").doc(meuNome).set({digitando:true});
+clearTimeout(typingTimeout);
+typingTimeout=setTimeout(()=>{
+db.collection("typing").doc(meuNome).set({digitando:false});
+},1000);
+}
+
+/* TYPING UI */
+db.collection("typing").onSnapshot(snap=>{
+let nomes=[];
+snap.forEach(doc=>{
+if(doc.data().digitando && doc.id!==meuNome){
+nomes.push(doc.id);
+}
+});
+
+const t=document.getElementById("typing");
+const som=document.getElementById("typingSound");
+
+if(nomes.length){
+t.style.display="block";
+t.innerHTML=`${nomes[0]} está a escrever<span class="dots"></span>`;
+if(!tocouSom){som.play().catch(()=>{});tocouSom=true;}
+}else{
+t.style.display="none";
+tocouSom=false;
+}
+});
+
+/* REPLY */
+function selecionarMensagem(texto,nome){
+replyMsg=texto;
+document.getElementById("replyUI").style.display="block";
+document.getElementById("replyNome").innerText=nome;
+document.getElementById("replyMsg").innerText=texto;
+}
+function cancelReply(){
+replyMsg=null;
+document.getElementById("replyUI").style.display="none";
+}
+
+/* ENVIAR */
+function enviar(){
+const msg=document.getElementById("mensagem");
+if(!msg.value)return;
+
+db.collection("mensagens").add({
+nome:meuNome,
+texto:msg.value,
+reply:replyMsg,
+data:Date.now()
+});
+
+msg.value="";
+cancelReply();
+}
+
+/* MOSTRAR */
+function mostrar(m){
+const chat=document.getElementById("chat");
+
+if(m.tipo==="entrada"){
+chat.innerHTML+=`<div class="system-msg">${m.nome} entrou</div>`;
+return;
+}
+
+const me=m.nome===meuNome;
+const cor=gerarCor(m.nome);
+
+chat.innerHTML+=`
+<div class="msg ${me?'me':'other'}" onclick="selecionarMensagem('${m.texto}','${m.nome}')">
+<div class="name-user">
+<span style="color:${cor}">${m.nome}</span>
+<span class="status-dot" id="status-${m.nome}"></span>
+</div>
+
+${m.reply?`<div style="font-size:12px;color:#aaa;border-left:2px solid #00a884;padding-left:5px;">${m.reply}</div>`:''}
+
+<div class="bubble">
+${m.texto}
+<div class="time">${formatarHora(m.data)}</div>
+</div>
+</div>`;
+}
+
+/* LISTEN COM NOTIFICAÇÃO */
+db.collection("mensagens").orderBy("data").onSnapshot(snap=>{
+document.getElementById("chat").innerHTML="";
+
+snap.forEach(doc=>{
+const m=doc.data();
+
+/* 🔔 NOTIFICAÇÃO */
+if(!primeiraCarga && m.nome!==meuNome){
+if(Notification.permission==="granted"){
+let texto = m.tipo==="entrada" 
+? m.nome+" entrou no chat"
+: m.texto;
+
+new Notification(m.nome,{
+body:texto,
+icon:"https://i.pravatar.cc/150?img=5"
+});
+}
+}
+
+mostrar(m);
+});
+
+primeiraCarga=false;
+});
+
+/* ONLINE */
+db.collection("status").onSnapshot(snap=>{
+snap.forEach(doc=>{
+const el=document.getElementById("status-"+doc.id);
+if(el){
+doc.data().online ? el.classList.add("online") : el.classList.remove("online");
+}
+});
+});
+</script>
+
+</body>
+</html>
